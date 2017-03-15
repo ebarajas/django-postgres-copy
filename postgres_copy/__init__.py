@@ -16,15 +16,17 @@ class CopyMapping(object):
     COPY command.
     """
     def __init__(
-        self,
-        model,
-        csv_path,
-        mapping,
-        using=None,
-        delimiter=',',
-        null=None,
-        encoding=None,
-        static_mapping=None
+            self,
+            model,
+            csv_path,
+            mapping,
+            using=None,
+            delimiter=',',
+            null=None,
+            encoding=None,
+            static_mapping=None,
+            upsert=False,
+            pk_field=None,
     ):
         # Set the required arguments
         self.model = model
@@ -32,6 +34,7 @@ class CopyMapping(object):
         self.csv_path = csv_path
         if not os.path.exists(self.csv_path):
             raise ValueError("csv_path does not exist")
+
 
         # Hook in the other optional settings
         self.delimiter = delimiter
@@ -41,6 +44,13 @@ class CopyMapping(object):
             self.static_mapping = OrderedDict(static_mapping)
         else:
             self.static_mapping = {}
+
+        # Check if this is going to be an update/insert
+        if upsert and not pk_field:
+            raise ValueError("pk_field must be set if using upsert")
+
+        self.upsert = upsert
+        self.pk_field = pk_field
 
         # Line up the database connection
         if using is not None:
@@ -181,6 +191,7 @@ class CopyMapping(object):
             FROM STDIN
             WITH CSV HEADER %(extra_options)s;
         """
+
         options = {
             'db_table': self.temp_table_name,
             'extra_options': '',
@@ -207,7 +218,8 @@ class CopyMapping(object):
         sql = """
             INSERT INTO "%(model_table)s" (%(model_fields)s) (
             SELECT %(temp_fields)s
-            FROM "%(temp_table)s");
+            FROM "%(temp_table)s")
+            %(upsert_clause)s;
         """
         options = dict(
             model_table=self.model._meta.db_table,
@@ -261,5 +273,21 @@ class CopyMapping(object):
         # Join it all together
         options['temp_fields'] = ", ".join(temp_fields)
 
+        if self.upsert:
+            clause = """
+                ON CONFLICT (%s) DO UPDATE set
+                %s
+            """
+            field_definitions = []
+            for field_name in self.mapping.keys():
+                string = "%s=excluded.%s" % (field_name, field_name)
+                field_definitions.append(string)
+
+            field_definitions = ", ".join(field_definitions)
+            options['upsert_clause'] = clause % (self.pk_field, field_definitions)
+        else:
+            options['upsert_clause'] = ''
+
         # Pass it out
-        return sql % options
+        string = sql % options
+        return string
