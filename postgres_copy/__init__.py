@@ -22,6 +22,7 @@ class CopyMapping(object):
             mapping,
             using=None,
             delimiter=',',
+            escapechar=None,
             null=None,
             encoding=None,
             static_mapping=None,
@@ -40,6 +41,7 @@ class CopyMapping(object):
         self.delimiter = delimiter
         self.null = null
         self.encoding = encoding
+        self.escapechar = escapechar
         if static_mapping is not None:
             self.static_mapping = OrderedDict(static_mapping)
         else:
@@ -127,7 +129,7 @@ class CopyMapping(object):
         # Run all of the raw SQL
         cursor.execute(drop_sql)
         cursor.execute(create_sql)
-        fp = open(self.csv_path, 'r')
+        fp = open(self.csv_path, 'r', encoding='utf-8', errors='replace')
         cursor.copy_expert(copy_sql, fp)
         cursor.execute(insert_sql)
         insert_count = cursor.rowcount
@@ -205,6 +207,8 @@ class CopyMapping(object):
             options['extra_options'] += " NULL '%s'" % self.null
         if self.encoding:
             options['extra_options'] += " ENCODING '%s'" % self.encoding
+        if self.escapechar:
+            options['extra_options'] += " ESCAPE '%s'" % self.escapechar
         return sql % options
 
     def prep_insert(self):
