@@ -28,6 +28,8 @@ class CopyMapping(object):
             static_mapping=None,
             upsert=False,
             pk_field=None,
+            pg_encoding=None,
+            csv_encoding='utf-8'
     ):
         # Set the required arguments
         self.model = model
@@ -40,7 +42,8 @@ class CopyMapping(object):
         # Hook in the other optional settings
         self.delimiter = delimiter
         self.null = null
-        self.encoding = encoding
+        self.pg_encoding = pg_encoding
+        self.csv_encoding = csv_encoding
         self.escapechar = escapechar
         if static_mapping is not None:
             self.static_mapping = OrderedDict(static_mapping)
@@ -129,7 +132,7 @@ class CopyMapping(object):
         # Run all of the raw SQL
         cursor.execute(drop_sql)
         cursor.execute(create_sql)
-        fp = open(self.csv_path, 'r', encoding='utf-8', errors='replace')
+        fp = open(self.csv_path, 'r', encoding=self.csv_encoding)
         cursor.copy_expert(copy_sql, fp)
         cursor.execute(insert_sql)
         insert_count = cursor.rowcount
@@ -205,8 +208,8 @@ class CopyMapping(object):
             options['extra_options'] += " DELIMITER '%s'" % self.delimiter
         if self.null is not None:
             options['extra_options'] += " NULL '%s'" % self.null
-        if self.encoding:
-            options['extra_options'] += " ENCODING '%s'" % self.encoding
+        if self.pg_encoding:
+            options['extra_options'] += " ENCODING '%s'" % self.pg_encoding
         if self.escapechar:
             options['extra_options'] += " ESCAPE '%s'" % self.escapechar
         return sql % options
